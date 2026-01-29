@@ -1,4 +1,6 @@
-# UCTF 2025
+# \<\/UCTF> 2025
+
+![Bannière </UCTF>](README/complet_arrière-plan.svg)
 
 La compétiton de cybersécurité de l'UQODE 2025 sur votre ordinateur.
 
