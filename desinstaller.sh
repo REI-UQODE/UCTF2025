@@ -6,11 +6,13 @@ volumes=("uctf-db_data" "uctf-redis_data" "uctf-registry_data" "uctf-uploads")
 # Conteneurs
 conteneurs=("uctf-nginx" "uctf-ctfd" "uctf-redis-svc" "uctf-chall-manager" "uctf-chall-manager-janitor" "uctf-registry" "uctf-db" "uctf-cache")
 
-for z in $conteneurs; do 
-    docker stop $(docker ps --format '{{.Names}}' | grep $z)
-    docker rm $(docker ps --format '{{.Names}}' | grep $z)
+# Arrêter et retirer tous les conteneurs
+for z in "${conteneurs[@]}"; do 
+    docker stop $(docker ps -a --format '{{.Names}}' | grep $z)
+    docker rm $(docker ps -a --format '{{.Names}}' | grep $z)
 done
 
+# Retirer tous les volumes
 for z in $volumes; do 
     docker volume rm $(docker volume ls --format '{{.Name}}' | grep $z)
 done
@@ -21,9 +23,9 @@ echo "Sinon, cette commande effacera les ressources inutilisé par cette applica
 echo "[O/n] > "
 read effacer
 
-if [ $effacer -eq "O" ] || [ $effacer -eq "o" ]; then 
-    docker system prune -y
-else; then 
+if [ "$effacer" == "O" ] || [ "$effacer" == "o" ]; then 
+    docker system prune -f
+else
     echo "'docker system prune' ne sera pas exécuté."
 fi
 

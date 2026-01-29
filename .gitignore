@@ -8,7 +8,8 @@ __pycache__
 # CTFd
 ctfd-uctf/.data
 sauvegarde/derniere
-sauvegarde/init
+sauvegarde/init/*
+sauvegarde/defis.zip
 chall-manager/examples
 sauvegarde/UCTF*
 
