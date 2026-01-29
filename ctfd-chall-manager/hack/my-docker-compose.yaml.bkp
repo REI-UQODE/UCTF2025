@@ -1,0 +1,135 @@
+services:
+  nginx:
+    image: nginx:stable
+    restart: always
+    volumes:
+      - ./nginx/http.conf:/etc/nginx/nginx.conf
+      - ./nginx/certs:/etc/nginx/certs
+    ports:
+      - 443:443
+      - 80:80
+    networks:          # <--- AJOUT CRITIQUE ICI
+      - testing
+    depends_on:
+      ctfd:
+        condition: service_healthy # <--- CONSEILLÉ (attend que le healthcheck de CTFd soit OK)
+
+
+  ctfd:
+    image: ctfd/ctfd:3.8.1@sha256:0de331947204628900fb68e01478dfd6f209aadf4eac269a2be08ee92af8ef0d
+    container_name: ctfd
+    networks:
+      - testing
+    volumes:
+      - themes:/opt/CTFd/CTFd/themes
+      - ../:/opt/CTFd/CTFd/plugins/ctfd_chall_manager
+      - uploads:/var/uploads
+    environment:
+      LOG_LEVEL: DEBUG
+      PLUGIN_SETTINGS_CM_API_URL: http://chall-manager:8080
+      PLUGIN_SETTINGS_CM_MANA_TOTAL: 10
+      REDIS_URL: redis://redis-svc:6379
+      DATABASE_URL : mysql+pymysql://root:password@mariadb-svc:3306/ctfd
+      SECRET_KEY: toto
+      REVERSE_PROXY: true
+      WORKERS: 2
+      UPLOAD_FOLDER: /var/uploads
+    depends_on:
+      - chall-manager
+      - redis-svc
+      - mariadb-svc
+    healthcheck:
+      test: python3 -c 'import requests; requests.get("http://localhost:8000")'
+      interval: 10s
+      retries: 3
+      timeout: 10s
+
+  chall-manager:
+    image: ctferio/chall-manager:v0.6.0@sha256:4d0a0379a3c12b2203500a7852856ef7202c7c54d58207fb88d4b8919d5f6add
+    container_name: chall-manager
+    pull_policy: always
+    ports:
+      - 8080:8080
+    environment:
+      SWAGGER: true
+      KUBECONFIG: /tmp/config
+      OCI_INSECURE: true
+    volumes:
+      - ~/.kube/config:/tmp/config:ro
+    networks:
+      - testing
+
+  chall-manager-janitor:
+    image: ctferio/chall-manager-janitor:v0.6.0@sha256:0194e6652aabe59539c1c167e15cc987309c4f49e65c9f3370f358d822246e6e
+    container_name: chall-manager-janitor
+    pull_policy: always
+    environment:
+      URL: chall-manager:8080
+      TICKER: 30s
+    networks:
+      - testing
+
+  redis-svc:
+    image: redis:7.0.10@sha256:92b8b307ee28ed74da17578064c73307ad41e43f422f0b7e4e91498b406c59e3
+    container_name: redis-svc
+    ports:
+      - 6379:6379
+    # ### ADDED THIS: Command to ensure Redis saves data to disk
+    command: redis-server --appendonly yes 
+    networks:
+      - testing
+    # ### ADDED THIS: Volume mapping for Redis
+    volumes:
+      - redis_data:/data 
+
+  mariadb-svc:
+    image: mariadb:10.11
+    container_name: mariadb-svc
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: ctfd
+    ports:
+      - 3306:3306
+    networks:
+      - testing
+    # ### ADDED THIS: Volume mapping for MariaDB (Crucial for users/challenges)
+    volumes:
+      - db_data:/var/lib/mysql 
+    command: [mysqld, --character-set-server=utf8mb4, --collation-server=utf8mb4_unicode_ci, --wait_timeout=28800, --log-warnings=0]
+
+  ctfd-setup:
+    image: ctferio/ctfd-setup:v1.7.1@sha256:d555410c10f66eb88a6579078d3f2c9131279e3057c21831a69feb447479b877
+    container_name: ctfd-setup
+    environment:
+      URL: http://ctfd-ui-1:8000
+      FILE: /.ctfd.yaml
+    volumes:
+      - .ctfd.yaml:/.ctfd.yaml
+    networks:
+      - testing
+    depends_on:
+      ctfd:
+        condition: service_healthy
+
+  registry:
+    image: registry:2
+    container_name: registry
+    ports:
+      - 5000:5000
+    networks:
+      - testing
+    # ### ADDED THIS: Volume mapping for Registry (if you push images, they persist)
+    volumes:
+      - registry_data:/var/lib/registry
+
+volumes:
+  uploads:
+  themes:
+  # ### ADDED THESE
+  db_data:
+  redis_data:
+  registry_data:
+
+networks:
+  testing:
+    driver: bridge

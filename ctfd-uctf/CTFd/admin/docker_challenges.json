@@ -1,0 +1,9 @@
+{
+  "docker_host": "unix:///var/run/docker.sock",
+  "network_mode": "bridge",
+  "challenge_timeout": 300,
+  "remove_container_on_finish": true,
+  "port_range": [20000, 30000],
+  "container_prefix": "ctfd_ch_",
+  "default_image": "ctfd/challenge-base:latest"
+}

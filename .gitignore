@@ -1,0 +1,16 @@
+# VSCode
+.vscode
+
+# python
+.venv
+__pycache__
+
+# CTFd
+ctfd-uctf/.data
+sauvegarde/derniere
+sauvegarde/init
+chall-manager/examples
+sauvegarde/UCTF*
+
+# CTFUqo
+ctfuqo/

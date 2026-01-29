@@ -1,0 +1,14 @@
+appearance:
+  name: 'UCTF'
+  description: 'CTF de l'uqo'
+
+admin:
+  name: admin
+  email: reis.titouamane@gmail.com
+  password: uctf4thebro5
+
+mode: 'teams'
+
+accounts:
+  team_creation: true
+  incorrect_submissions_per_minute: 9999 # bypass ratelimit

@@ -1,0 +1,155 @@
+services:
+  nginx:
+    image: nginx:stable
+    container_name: uctf-nginx
+    restart: always
+    volumes:
+      - ./nginx/http.conf:/etc/nginx/nginx.conf
+      - ./nginx/certs:/etc/nginx/certs
+    ports:
+      - 443:443
+      - 80:80
+    networks:          # <--- AJOUT CRITIQUE ICI
+      - ctfd
+    depends_on:
+      ctfd:
+        condition: service_healthy # <--- CONSEILLÉ (attend que le healthcheck de CTFd soit OK)
+
+  ctfd:
+    container_name: uctf-ctfd
+    build: ./ctfd-uctf
+    user: root
+    restart: always
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - UPLOAD_FOLDER=/var/uploads
+      - DATABASE_URL=mysql+pymysql://ctfd:ctfd@db/ctfd
+      - REDIS_URL=redis://cache:6379
+      - WORKERS=2
+      - LOG_LEVEL=DEBUG
+      - LOG_FOLDER=/var/log/CTFd
+      - ACCESS_LOG=-
+      - ERROR_LOG=-
+      - REVERSE_PROXY=true
+      - PLUGIN_SETTINGS_CM_API_URL=http://chall-manager:8080
+      - PLUGIN_SETTINGS_CM_MANA_TOTAL=10
+      # - REDIS_URL=redis://redis-svc:6379
+      # - DATABASE_URL =mysql+pymysql://root:password@mariadb-svc:3306/ctfd
+      - SECRET_KEY=toto
+    volumes:
+      - ./ctfd-uctf:/opt/CTFd
+      - ./ctfd-uctf/.data/CTFd/logs:/var/log/CTFd
+      - uploads:/var/uploads
+      - /var/run/docker.sock:/var/run/docker.sock  # <--- add this
+      - ./ctfd-chall-manager:/opt/CTFd/CTFd/plugins/ctfd_chall_manager
+    depends_on:
+      db:
+        condition: service_started
+      chall-manager:
+        condition: service_started
+      redis-svc:
+        condition: service_started
+    healthcheck:
+      test: python3 -c 'import requests; requests.get("http://localhost:8000")'
+      interval: 10s
+      retries: 3
+      timeout: 10s
+    networks:
+        ctfd:
+        internal:
+    
+  redis-svc:
+    image: redis:7.0.10@sha256:92b8b307ee28ed74da17578064c73307ad41e43f422f0b7e4e91498b406c59e3
+    container_name: uctf-redis-svc
+    ports:
+      - 6379:6379
+    # ### ADDED THIS: Command to ensure Redis saves data to disk
+    command: redis-server --appendonly yes 
+    networks:
+      - ctfd
+    # ### ADDED THIS: Volume mapping for Redis
+    volumes:
+      - redis_data:/data 
+  
+  chall-manager:
+    build: 
+      context: ./chall-manager/
+      dockerfile: Dockerfile.chall-manager
+    container_name: uctfd-chall-manager
+    pull_policy: always
+    ports:
+      - 8080:8080
+    environment:
+      SWAGGER: true
+      KUBECONFIG: /tmp/config
+      OCI_INSECURE: true
+    volumes:
+      - ./.kube/config:/tmp/config:ro
+    networks:
+      - ctfd
+
+  chall-manager-janitor:
+    build: 
+      context: ./chall-manager/
+      dockerfile: Dockerfile.chall-manager-janitor
+    container_name: uctf-chall-manager-janitor
+    pull_policy: always
+    environment:
+      URL: chall-manager:8080
+      TICKER: 30s
+    networks:
+      - ctfd
+
+  registry:
+    image: registry:2
+    container_name: uctf-registry
+    ports:
+      - 5000:5000
+    networks:
+      - ctfd
+    # ### ADDED THIS: Volume mapping for Registry (if you push images, they persist)
+    volumes:
+      - registry_data:/var/lib/registry
+
+  db:
+    image: mariadb:10.11
+    container_name: uctf-db
+    restart: always
+    environment:
+      - MARIADB_ROOT_PASSWORD=ctfd
+      - MARIADB_USER=ctfd
+      - MARIADB_PASSWORD=ctfd
+      - MARIADB_DATABASE=ctfd
+      - MARIADB_AUTO_UPGRADE=1
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+        internal:
+    # This command is required to set important mariadb defaults
+    command: [mysqld, --character-set-server=utf8mb4, --collation-server=utf8mb4_unicode_ci, --wait_timeout=28800, --log-warnings=0]
+
+  cache:
+    image: redis:4
+    container_name: uctf-cache
+    restart: always
+    volumes:
+      - ./ctfd-uctf/.data/redis:/data
+    networks:
+        internal:
+
+volumes:
+  uploads:
+    name: uctf-uploads
+  db_data:
+    name: uctf-db_data
+  redis_data:
+    name: uctf-redis_data
+  registry_data:
+    name: uctf-registry_data
+
+networks:
+  ctfd:
+    driver: bridge
+  internal:
+    internal: true
